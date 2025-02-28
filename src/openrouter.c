@@ -1,5 +1,4 @@
 #include "openrouter.h"
-
 #include <curl/curl.h>
 
 typedef CURL*               PCURL;
@@ -7,12 +6,21 @@ typedef struct curl_slist   CurlList;
 typedef struct curl_slist*  PCurlList;
 typedef struct curl_slist** PPCurlList;
 
+typedef struct {
+  PCHAR               url;
+  PCurlList           headers;
+  PCHAR               json_data;
+  bool                is_verbose;
+  POpenRouterResponse response;
+} CurlOptionArgs;
+typedef CurlOptionArgs* PCurlOptionArgs;
+
 static size_t writeCallback(PVOID ptr, size_t size, size_t nmemb, PVOID userdata);
 static bool   isBlankStr(const PCHAR str, const size_t size);
 static void   makeAuthHeader(const size_t capacity, const PCHAR api_key, PCHAR auth_header);
 static void   makeHeaders(const PCHAR auth_header, PPCurlList headers);
 static void   makeJsonData(const PCHAR model, const PCHAR content, const size_t capacity, PCHAR json_data);
-static void   setCurlOpt(const PCHAR url, const PCurlList headers, const PCHAR json_data, const bool is_verbose, POpenRouterResponse response, PCURL curl);
+static void   setCurlOpt(PCurlOptionArgs args, PCURL curl);
 
 static PUserWriteCallback g_write = NULL;
 
@@ -35,7 +43,14 @@ bool reqOpenRouter(POpenRouterArgs args, POpenRouterResponse response)
   makeAuthHeader(sizeof(auth_header), args->api_key, auth_header);
   makeHeaders(auth_header, &headers);
   makeJsonData(args->model, args->content, sizeof(json_data), json_data);
-  setCurlOpt(args->url, headers, json_data, args->is_verbose, response, curl);
+
+  CurlOptionArgs curl_args;
+  curl_args.url        = args->url;
+  curl_args.headers    = headers;
+  curl_args.json_data  = json_data;
+  curl_args.is_verbose = args->is_verbose;
+  curl_args.response   = response;
+  setCurlOpt(&curl_args, curl);
 
   g_write = args->write;
 
@@ -53,11 +68,10 @@ FINALIZE:
 }
 
 static size_t writeCallback(
-  PVOID ptr,
+  PVOID  ptr,
   size_t size,
   size_t nmemb,
-  PVOID userdata
-)
+  PVOID  userdata)
 {
   size_t              realsize = size * nmemb;
   POpenRouterResponse response = (POpenRouterResponse)userdata;
@@ -86,9 +100,8 @@ static bool isBlankStr(const PCHAR str, const size_t size)
 
 static void makeAuthHeader(
   const size_t capacity,
-  const PCHAR api_key,
-  PCHAR auth_header
-)
+  const PCHAR  api_key,
+  PCHAR        auth_header)
 {
   snprintf(auth_header, capacity, "Authorization: Bearer %s", api_key);
 }
@@ -100,32 +113,27 @@ static void makeHeaders(const PCHAR auth_header, PPCurlList headers)
 }
 
 static void makeJsonData(
-  const PCHAR model,
-  const PCHAR content,
+  const PCHAR  model,
+  const PCHAR  content,
   const size_t capacity,
-  PCHAR json_data
-)
+  PCHAR        json_data)
 {
   snprintf(
     json_data,
     capacity,
     "{\"model\":\"%s\",\"messages\":[{\"role\":\"user\",\"content\":\"%s\"}]}",
-    model, content);
+    model,
+    content);
 }
 
 static void setCurlOpt(
-  const PCHAR url,
-  const PCurlList headers,
-  const PCHAR json_data,
-  const bool is_verbose,
-  POpenRouterResponse response,
-  PCURL curl
-)
+  PCurlOptionArgs args,
+  PCURL           curl)
 {
-  curl_easy_setopt(curl, CURLOPT_URL, url);
-  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_data);
+  curl_easy_setopt(curl, CURLOPT_URL, args->url);
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, args->headers);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, args->json_data);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (PVOID)response);
-  curl_easy_setopt(curl, CURLOPT_VERBOSE, (is_verbose) ? 1L : 0L);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (PVOID)args->response);
+  curl_easy_setopt(curl, CURLOPT_VERBOSE, (args->is_verbose) ? 1L : 0L);
 }

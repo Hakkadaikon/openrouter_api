@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-
 #include "openrouter.h"
 
 size_t userWriteCallback(PVOID ptr, size_t size, POpenRouterResponse response);

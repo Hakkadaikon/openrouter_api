@@ -14,10 +14,9 @@ typedef struct {
 typedef OpenRouterResponse* POpenRouterResponse;
 
 typedef size_t (*PUserWriteCallback)(
-  PVOID ptr,
-  size_t size,
-  POpenRouterResponse response
-);
+  PVOID               ptr,
+  size_t              size,
+  POpenRouterResponse response);
 
 typedef struct {
   PCHAR              url;
