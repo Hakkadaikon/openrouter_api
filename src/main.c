@@ -10,12 +10,13 @@ int main(void)
   const PCHAR url       = "https://openrouter.ai/api/v1/chat/completions";
   const PCHAR model     = "openai/gpt-4o";
   const char  api_key[] = "-- api-key --";
-  const PCHAR content   = "What is the meaning of life?";
+  const PCHAR content   = "hello. how are you?";
 
   OpenRouterArgs     args;
   OpenRouterResponse response;
 
   memset(&args, 0x00, sizeof(args));
+  memset(&response, 0x00, sizeof(response));
 
   args.url        = url;
   args.model      = model;
@@ -24,8 +25,9 @@ int main(void)
   args.is_verbose = false;
   args.write      = userWriteCallback;
 
-  if (!reqOpenRouter(&args, &response)) {
+  if (reqOpenRouter(&args, &response)) {
     printf("response : %s\n", response.data);
+    fflush(stdout);
   }
 
   if (response.data != NULL) {
@@ -47,5 +49,7 @@ size_t userWriteCallback(PVOID ptr, size_t size, POpenRouterResponse response)
   response->size += size;
   response->data[response->size] = '\0';
 
+  //printf("userWriteCallback: data:%s ptr:%s size:%ld\n", response->data, (char*)ptr, size);
+  //fflush(stdout);
   return size;
 }

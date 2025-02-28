@@ -9,13 +9,14 @@ typedef struct curl_slist** PPCurlList;
 
 static size_t writeCallback(PVOID ptr, size_t size, size_t nmemb, PVOID userdata);
 static bool   isBlankStr(const PCHAR str, const size_t size);
-static void   makeHeaders(const PCHAR api_key, PPCurlList headers);
+static void   makeAuthHeader(const size_t capacity, const PCHAR api_key, PCHAR auth_header);
+static void   makeHeaders(const PCHAR auth_header, PPCurlList headers);
 static void   makeJsonData(const PCHAR model, const PCHAR content, const size_t capacity, PCHAR json_data);
-static void   setCurlOpt(const PCHAR url, const PCurlList headers, const PCHAR json_data, const bool is_verbose, POpenRouterResponse chunk, PCURL curl);
+static void   setCurlOpt(const PCHAR url, const PCurlList headers, const PCHAR json_data, const bool is_verbose, POpenRouterResponse response, PCURL curl);
 
 static PUserWriteCallback g_write = NULL;
 
-bool reqOpenRouter(POpenRouterArgs args, POpenRouterResponse chunk)
+bool reqOpenRouter(POpenRouterArgs args, POpenRouterResponse response)
 {
   CURLcode res = CURLE_OK;
 
@@ -29,10 +30,12 @@ bool reqOpenRouter(POpenRouterArgs args, POpenRouterResponse chunk)
 
   PCurlList headers = NULL;
   char      json_data[2048];
+  char      auth_header[256];
 
-  makeHeaders(args->api_key, &headers);
+  makeAuthHeader(sizeof(auth_header), args->api_key, auth_header);
+  makeHeaders(auth_header, &headers);
   makeJsonData(args->model, args->content, sizeof(json_data), json_data);
-  setCurlOpt(args->url, headers, json_data, args->is_verbose, chunk, curl);
+  setCurlOpt(args->url, headers, json_data, args->is_verbose, response, curl);
 
   g_write = args->write;
 
@@ -49,10 +52,18 @@ FINALIZE:
   return (res == CURLE_OK);
 }
 
-static size_t writeCallback(PVOID ptr, size_t size, size_t nmemb, PVOID userdata)
+static size_t writeCallback(
+  PVOID ptr,
+  size_t size,
+  size_t nmemb,
+  PVOID userdata
+)
 {
   size_t              realsize = size * nmemb;
   POpenRouterResponse response = (POpenRouterResponse)userdata;
+
+  //printf("WriteCallback: %s\n", (char*)ptr);
+  //fflush(stdout);
 
   if (isBlankStr(ptr, realsize)) {
     return realsize;
@@ -73,31 +84,48 @@ static bool isBlankStr(const PCHAR str, const size_t size)
   return true;
 }
 
-static void makeHeaders(const PCHAR api_key, PPCurlList headers)
+static void makeAuthHeader(
+  const size_t capacity,
+  const PCHAR api_key,
+  PCHAR auth_header
+)
 {
-  char auth_header[256];
+  snprintf(auth_header, capacity, "Authorization: Bearer %s", api_key);
+}
 
-  snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", api_key);
+static void makeHeaders(const PCHAR auth_header, PPCurlList headers)
+{
   *headers = curl_slist_append(*headers, "Content-Type: application/json");
   *headers = curl_slist_append(*headers, auth_header);
 }
 
-static void makeJsonData(const PCHAR model, const PCHAR content, const size_t capacity, PCHAR json_data)
+static void makeJsonData(
+  const PCHAR model,
+  const PCHAR content,
+  const size_t capacity,
+  PCHAR json_data
+)
 {
   snprintf(
-      json_data,
-      capacity,
-      "{\"model\":\"%s\",\"messages\":[{\"role\":\"user\",\"content\":\"%s\"}]}",
-      model,
-      content);
+    json_data,
+    capacity,
+    "{\"model\":\"%s\",\"messages\":[{\"role\":\"user\",\"content\":\"%s\"}]}",
+    model, content);
 }
 
-static void setCurlOpt(const PCHAR url, const PCurlList headers, const PCHAR json_data, const bool is_verbose, POpenRouterResponse chunk, PCURL curl)
+static void setCurlOpt(
+  const PCHAR url,
+  const PCurlList headers,
+  const PCHAR json_data,
+  const bool is_verbose,
+  POpenRouterResponse response,
+  PCURL curl
+)
 {
   curl_easy_setopt(curl, CURLOPT_URL, url);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
   curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_data);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (PVOID)chunk);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, (PVOID)response);
   curl_easy_setopt(curl, CURLOPT_VERBOSE, (is_verbose) ? 1L : 0L);
 }
